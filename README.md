@@ -9,8 +9,15 @@ O **eTrilhos** é uma ferramenta digital desenvolvida para facilitar a pesquisa 
 1. **Visualização Hierárquica de Ativos**
    - Exibe a estrutura de montagem de um ativo de forma hierárquica (ex: árvore de componentes).
    - Permite expandir/colapsar nós e visualizar detalhes técnicos.
-   - Exibe imagens associadas aos componentes.
-   - Exporta a estrutura para Excel.
+   - Exibe imagens associadas aos componentes com opção de navegabilidade entre imagens e recursos de zoom.
+   - Exibe documentação associada aos componentes.
+   - Exporta a estrutura (montagem, sub-montagem) para Excel.
+
+      **Modo Edição**:
+   - Acesso com senha.
+   - Permite editar o texto dos nós e campos de tabela.
+   - Adição ou remoção de nós na árvore de componentes.
+   - Salva as alterações e gera um novo arquivo de visualização json.
 
 2. **Pesquisa de Materiais**
    - Campo de busca com filtros por depósito e disponibilidade.
