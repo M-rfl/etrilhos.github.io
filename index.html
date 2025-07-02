@@ -3428,6 +3428,23 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 </script>
 
+<script>
+document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+        const componentImage = document.getElementById("componentImage");
+        if (componentImage && componentImage.style.display !== "none") {
+            componentImage.style.display = "none";
+
+            // Opcional: limpar contadores ou info da imagem
+            const imageInfo = document.getElementById("imageInfo");
+            if (imageInfo) {
+                imageInfo.textContent = "0 / 0";
+            }
+        }
+    }
+});
+</script>
+	
 </body>
 </html>
 <script>
