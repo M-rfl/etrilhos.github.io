@@ -3411,19 +3411,17 @@ function showImageModal(imageUrl, materialId) {
 }
 </script>
 <script>
-document.addEventListener("DOMContentLoaded", function () {
-    const searchInput = document.getElementById("searchInput");
-
-    if (searchInput) {
-        searchInput.addEventListener("keypress", function (event) {
-            if (event.key === "Enter") {
-                event.preventDefault(); // Evita comportamento padrão
-                const filterButton = document.getElementById("filterButton");
-                if (filterButton) {
-                    filterButton.click();
-                }
+document.addEventListener("keydown", function (event) {
+    if (event.key === "Enter") {
+        // Verifica se a aba PESQUISA MATERIAL está ativa
+        const pesquisaTab = document.getElementById("pesquisaMaterial");
+        if (pesquisaTab && pesquisaTab.classList.contains("active")) {
+            const filterButton = document.getElementById("filterButton");
+            if (filterButton) {
+                event.preventDefault(); // Evita envio de formulários ou outras ações padrões
+                filterButton.click();
             }
-        });
+        }
     }
 });
 </script>
