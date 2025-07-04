@@ -1087,6 +1087,23 @@ function toggleEditMode() {
             componentImage.style.transform = `translate(-50%, -50%) scale(${scale})`;
         }
 
+	// Scroll zoom com mouse
+	document.addEventListener("DOMContentLoaded", function () {
+	    const imageContainer = document.getElementById("imageContainer");
+
+	    imageContainer.addEventListener("wheel", function (event) {
+		// Previne a rolagem padrão da página
+		event.preventDefault();
+
+		// Verifica a direção do scroll
+		if (event.deltaY < 0) {
+		    zoomImage(1.1); // scroll para cima → zoom in
+		} else {
+		    zoomImage(0.9); // scroll para baixo → zoom out
+		}
+	    }, { passive: false });
+	});
+
         function resetZoom() {
             scale = 1;
     	    componentImage.style.left = '50%';  // Reset left position to center
