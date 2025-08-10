@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GLB 3D Viewer — GitHub Pages</title>
+  <style>
+    :root { color-scheme: dark; }
+    html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial; background:#0b1020; color:#e8eefc; }
+    #toolbar { position: fixed; top: 0; left: 0; right: 0; display: flex; gap: 8px; align-items: center; padding: 10px 12px; background: rgba(12,18,40,.75); backdrop-filter: blur(8px); border-bottom: 1px solid #1e2947; z-index: 10; }
+    #toolbar input[type="text"] { flex: 1; min-width: 260px; padding: 8px 10px; border-radius: 12px; border: 1px solid #2a3c67; background:#0f1530; color:#e8eefc; }
+    #toolbar input::placeholder { color:#90a6cf; }
+    #toolbar button { padding: 8px 12px; border-radius: 12px; border: 1px solid #2a3c67; background:#18254a; color:#e8eefc; cursor: pointer; }
+    #toolbar button:hover { filter: brightness(1.08); }
+    #status { font-size: 12px; color:#9cc8ff; margin-left: 6px; }
+    #viewer { position: absolute; inset: 52px 0 0 0; }
+    #drop { position:absolute; inset:52px 0 0 0; display:none; align-items:center; justify-content:center; border:2px dashed #2a3c67; color:#8ea6d1; pointer-events:none }
+    #legend { position: fixed; right: 12px; bottom: 12px; background: rgba(13,18,40,.7); border: 1px solid #1d2946; border-radius: 12px; padding: 10px 12px; font-size: 12px; color:#c9d6f2 }
+    a { color:#9cc8ff }
+  </style>
+  <!--
+    HOW TO USE ON GITHUB PAGES
+    ----------------------------------
+    1) Put this HTML file in your GitHub Pages repo (e.g., M-rfl/etrilhos.github.io/index_3d.html).
+    2) Put your GLB model in the same site, ideally: /data/model.glb (same-origin avoids CORS issues on Pages).
+    3) Open the viewer and either:
+       • Click "Load /data/model.glb" (default button) if your file is at /data/model.glb, OR
+       • Paste any absolute URL (https://yourname.github.io/data/your.glb) in the input and click Load.
+    4) You can also pass a query param: index_3d.html?src=/data/model.glb
+  -->
+</head>
+<body>
+  <div id="toolbar">
+    <strong>GLB URL:</strong>
+    <input id="src" type="text" placeholder="/data/model.glb or https://yourname.github.io/data/model.glb" />
+    <button id="loadBtn">Load</button>
+    <button id="loadDefaultBtn" title="Loads /data/model.glb on this site">Load /data/model.glb</button>
+    <button id="demoBtn" title="Loads a small public sample">Demo</button>
+    <span id="status" aria-live="polite"></span>
+  </div>
+
+  <div id="viewer"></div>
+  <div id="drop">Drop a .glb file here</div>
+  <div id="legend">Mouse: orbit • Shift+Drag: pan • Wheel: zoom • <kbd>D</kbd>: grid • <kbd>B</kbd>: fit • <kbd>R</kbd>: reset</div>
+
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+    import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+    import { GLTFLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+
+    // ---------- Base Setup ----------
+    const container = document.getElementById('viewer');
+    const dropzone = document.getElementById('drop');
+    const status = document.getElementById('status');
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.01, 2000);
+    camera.position.set(2.8, 1.8, 3.8);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x222233, 0.9);
+    scene.add(hemi);
+    const dir = new THREE.DirectionalLight(0xffffff, 1.0);
+    dir.position.set(6, 10, 6);
+    dir.castShadow = true;
+    scene.add(dir);
+
+    const grid = new THREE.GridHelper(10, 10, 0x3355aa, 0x223366);
+    grid.visible = true;
+    scene.add(grid);
+
+    let current;
+
+    function setStatus(msg, isError=false){
+      status.textContent = msg || '';
+      status.style.color = isError ? '#ffb3b3' : '#9cc8ff';
+    }
+
+    function fitCameraToObject(object, offset = 1.18) {
+      const box = new THREE.Box3().setFromObject(object);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      const maxSize = Math.max(size.x, size.y, size.z);
+      const fitHeightDistance = maxSize / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
+      const fitWidthDistance = fitHeightDistance / camera.aspect;
+      const distance = offset * Math.max(fitHeightDistance, fitWidthDistance);
+
+      controls.maxDistance = distance * 20;
+      camera.near = distance / 100;
+      camera.far = distance * 200;
+      camera.updateProjectionMatrix();
+
+      // Position the camera diagonally above the center
+      camera.position.copy(center.clone().add(new THREE.Vector3(distance, distance * 0.66, distance)));
+      controls.target.copy(center);
+      controls.update();
+    }
+
+    function clearModel(){
+      if (!current) return;
+      scene.remove(current);
+      current.traverse(o=>{
+        if (o.isMesh) {
+          o.geometry?.dispose?.();
+          if (o.material?.map) o.material.map.dispose?.();
+          if (o.material?.dispose) o.material.dispose();
+        }
+      });
+      current = undefined;
+    }
+
+    async function loadGLB(url){
+      setStatus('Loading...');
+      clearModel();
+      const loader = new GLTFLoader();
+      return new Promise((resolve, reject)=>{
+        loader.load(url, (gltf)=>{
+          current = gltf.scene;
+          scene.add(current);
+          fitCameraToObject(current);
+          setStatus('Loaded ✅');
+          resolve();
+        }, (xhr)=>{
+          if (xhr.total) setStatus(`Loading ${Math.round(xhr.loaded/xhr.total*100)}%...`);
+        }, (err)=>{
+          console.error(err);
+          setStatus('Failed to load model. Check the URL or CORS.', true);
+          reject(err);
+        });
+      });
+    }
+
+    async function handleLoad(rawUrl){
+      const input = (rawUrl ?? document.getElementById('src').value).trim();
+      if (!input) { setStatus('Enter a GLB URL first.', true); return; }
+
+      try {
+        await loadGLB(input);
+        const params = new URLSearchParams(location.search);
+        params.set('src', input);
+        history.replaceState({}, '', `${location.pathname}?${params.toString()}`);
+      } catch(e) {}
+    }
+
+    // --- Query param support: ?src=/data/model.glb
+    (function initFromQuery(){
+      const params = new URLSearchParams(location.search);
+      const src = params.get('src');
+      if (src) {
+        document.getElementById('src').value = src;
+        handleLoad(src);
+      } else {
+        // noop: user can click "Load /data/model.glb"
+      }
+    })();
+
+    // --- Drag & drop local .glb (no CORS issues) ---
+    function preventDefaults(e){ e.preventDefault(); e.stopPropagation(); }
+    ['dragenter','dragover','dragleave','drop'].forEach(ev => window.addEventListener(ev, preventDefaults, false));
+    ['dragenter','dragover'].forEach(() => window.addEventListener('dragover', ()=>{ dropzone.style.display='flex'; }, false));
+    ['dragleave','drop'].forEach(() => window.addEventListener('dragleave', ()=>{ dropzone.style.display='none'; }, false));
+    window.addEventListener('drop', (e)=>{
+      const file = e.dataTransfer.files?.[0];
+      if (!file) return;
+      if (!file.name.toLowerCase().endsWith('.glb')) { setStatus('Please drop a .glb file.', true); return; }
+      clearModel();
+      const url = URL.createObjectURL(file);
+      loadGLB(url);
+    });
+
+    // --- UI buttons ---
+    document.getElementById('loadBtn').addEventListener('click', ()=>handleLoad());
+    document.getElementById('loadDefaultBtn').addEventListener('click', ()=>handleLoad('/data/model.glb'));
+    document.getElementById('demoBtn').addEventListener('click', ()=>{
+      document.getElementById('src').value = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb';
+      handleLoad();
+    });
+
+    // --- Keyboard helpers ---
+    window.addEventListener('keydown', (e)=>{
+      if (e.key.toLowerCase()==='d') grid.visible = !grid.visible;
+      if (e.key.toLowerCase()==='b' && current) fitCameraToObject(current, 1.12);
+      if (e.key.toLowerCase()==='r') {
+        camera.position.set(2.8, 1.8, 3.8);
+        controls.target.set(0,0,0);
+        controls.update();
+      }
+    });
+
+    // --- Resize ---
+    const onResize = ()=>{
+      const { clientWidth:w, clientHeight:h } = container;
+      camera.aspect = w / h; camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    };
+    window.addEventListener('resize', onResize);
+    onResize();
+
+    // --- Render loop ---
+    (function animate(){
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    })();
+  </script>
+</body>
+</html>
